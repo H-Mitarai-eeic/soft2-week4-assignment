@@ -39,7 +39,6 @@ struct solution{
 //  乱数シード: seed (int) // 品物の値をランダムにする
 // 返り値:
 //  確保されたItemset へのポインタ
-Itemset *init_itemset(int number, int seed);
 
 void free_itemset(Itemset *list);
 
@@ -92,24 +91,85 @@ struct solution solve(const Itemset *list, double capacity);
 struct solution search(int index, const Itemset *list, double capacity, unsigned char *flags, double sum_v, double sum_w);
 
 // エラー判定付きの読み込み関数
-int load_int(const char *argvalue);
 double load_double(const char *argvalue);
 
-int load_int(const char *argvalue)
+// main関数
+// プログラム使用例: ./knapsack 10 20
+//  10個の品物を設定し、キャパ20 でナップサック問題をとく
+int main (int argc, char**argv)
 {
-  long nl;
-  char *e;
-  errno = 0; // errno.h で定義されているグローバル変数を一旦初期化
-  nl = strtol(argvalue,&e,10);
-  if (errno == ERANGE){
-    fprintf(stderr,"%s: %s\n",argvalue,strerror(errno));
-    exit(1);
-  }
-  if (*e != '\0'){
-    fprintf(stderr,"%s: an irregular character '%c' is detected.\n",argvalue,*e);
-    exit(1);
-  }
-  return (int)nl;
+    const int max_items = 100;
+    const double W = load_double(argv[2]);; //max capacity
+    Itemset *items;
+    
+  /* 引数処理: ユーザ入力が正しくない場合は使い方を標準エラーに表示して終了 */
+    if ( argc != 3 ) {
+        fprintf(stderr, "usage: %s [filename for init] [max capacity of a knapsack]\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+    else if (argc == 3) {
+        items = load_itemset(argv[1]);
+    }
+    if(items == NULL){
+        printf("error: failed to read binary data.\n");
+        return 1;
+    }
+    print_itemset(items);
+    assert( items->number <= max_items ); // assert で止める
+    assert( W >= 0.0);
+    printf("max capacity: W = %.f, # of items: %d\n",W, items->number);
+
+    // ソルバーで解く
+    struct solution sol = solve(items, W);
+
+    // 表示する
+    printf("----\nbest solution:\n");
+    for (int i = 0 ; i < items->number ; i++){
+        printf("%d", sol.flags[i]);
+    }
+    printf(", value: %4.1f\n",sol.val);
+    free(sol.flags);
+    free_itemset(items);
+    return 0;
+}
+
+// 構造体をポインタで確保するお作法を確認してみよう
+
+Itemset *load_itemset(char *filename){
+    //失敗したらNULLを返す
+    FILE *fp;
+    Itemset *list = (Itemset*) malloc(sizeof(Itemset));
+    Item *item;
+    int num;
+    int i;  //counter
+
+    fp = fopen(filename, "rb");
+    if(fp == NULL){
+        return NULL;
+    }
+
+    if(fread(&num, sizeof(int), 1, fp) != 1){
+        return NULL;
+    }
+
+    item = (Item*) malloc(sizeof(Item) * num);
+
+    for(i = 0; i < num; i++){
+        if(fread(&(item[i].value), sizeof(double), 1, fp) != 1){
+            return NULL;
+        }
+    }
+    for(i = 0; i < num; i++){
+        if(fread(&(item[i].weight), sizeof(double), 1, fp) != 1){
+            return NULL;
+        }
+    }
+
+    list->item = item;
+    list->number = num;
+
+    fclose(fp);
+    return list;
 }
 double load_double(const char *argvalue)
 {
@@ -128,69 +188,11 @@ double load_double(const char *argvalue)
   return ret;
 }
 
-
-// main関数
-// プログラム使用例: ./knapsack 10 20
-//  10個の品物を設定し、キャパ20 でナップサック問題をとく
-int main (int argc, char**argv)
-{
-  /* 引数処理: ユーザ入力が正しくない場合は使い方を標準エラーに表示して終了 */
-  if (argc != 3){
-    fprintf(stderr, "usage: %s <the number of items (int)> <max capacity (double)>\n",argv[0]);
-    exit(1);
-  }
-  
-  // 個数の上限はあらかじめ定めておく
-  const int max_items = 100;
-
-  const int n = load_int(argv[1]);
-  assert( n <= max_items ); // assert で止める
-
-  const double W = load_double(argv[2]);
-  assert( W >= 0.0);
-  
-  printf("max capacity: W = %.f, # of items: %d\n",W, n);
-
-  // 乱数シードを1にして、初期化 (ここは変更可能)
-  int seed = 1; 
-  Itemset *items = init_itemset(n, seed);
-  print_itemset(items);
-
-  // ソルバーで解く
-  struct solution sol = solve(items, W);
-
-  // 表示する
-  printf("----\nbest solution:\n");
-  for (int i = 0 ; i < items->number ; i++){
-      printf("%d", sol.flags[i]);
-  }
-  printf(", value: %4.1f\n",sol.val);
-  free(sol.flags);
-  free_itemset(items);
-  return 0;
-}
-
-// 構造体をポインタで確保するお作法を確認してみよう
-Itemset *init_itemset(int number, int seed)
-{
-  Itemset *list = (Itemset*)malloc(sizeof(Itemset));
-
-  Item *item = (Item*)malloc(sizeof(Item)*number);
-
-  srand(seed);
-  for (int i = 0 ; i < number ; i++){
-    item[i].value = 0.1 * (rand() % 200);
-    item[i].weight = 0.1 * (rand() % 200 + 1);
-  }
-  *list = (Itemset){.number = number, .item = item};
-  return list;
-}
-
 // itemset の free関数
 void free_itemset(Itemset *list)
 {
-  free(list->item);
-  free(list);
+    free(list->item);
+    free(list);
 }
 
 // 表示関数

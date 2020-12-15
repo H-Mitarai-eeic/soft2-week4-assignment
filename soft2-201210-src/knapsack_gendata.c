@@ -64,7 +64,7 @@ void print_itemset(const Itemset *list);
 // Itemsetの必要パラメータを吐き出すファイルの名前 filename (char*)
 // 返り値:
 //  なし
-void save_itemset(char *filename);
+int save_itemset(char *filename, Itemset *list);
 
 // double solve()
 //
@@ -95,6 +95,99 @@ struct solution search(int index, const Itemset *list, double capacity, unsigned
 int load_int(const char *argvalue);
 double load_double(const char *argvalue);
 
+// main関数
+// プログラム使用例: ./knapsack 10 20
+//  10個の品物を設定し、キャパ20 でナップサック問題をとく
+int main (int argc, char**argv)
+{
+    /* 引数処理: ユーザ入力が正しくない場合は使い方を標準エラーに表示して終了 */
+    if (argc != 4){
+        fprintf(stderr, "usage: %s <the number of items (int)> <max capacity (double)> <filename>\n",argv[0]);
+        exit(1);
+    }
+    
+    // 個数の上限はあらかじめ定めておく
+    const int max_items = 100;
+    const int n = load_int(argv[1]);
+    assert( n <= max_items ); // assert で止める
+
+    const double W = load_double(argv[2]);
+    assert( W >= 0.0);
+    
+    printf("max capacity: W = %.f, # of items: %d\n",W, n);
+
+    // 乱数シードを1にして、初期化 (ここは変更可能)
+    int seed = 1; 
+    Itemset *items = init_itemset(n, seed);
+    print_itemset(items);
+
+    // ソルバーで解く
+    struct solution sol = solve(items, W);
+
+    // 表示する
+    printf("----\nbest solution:\n");
+    for (int i = 0 ; i < items->number ; i++){
+        printf("%d", sol.flags[i]);
+    }
+    printf(", value: %4.1f\n",sol.val);
+
+    if(save_itemset(argv[3], items) != 0){
+        printf("error: failed to save data\n");
+    }
+    else{
+        printf("成功\n");
+    }
+
+    free(sol.flags);
+    free_itemset(items);
+    return 0;
+}
+
+// 構造体をポインタで確保するお作法を確認してみよう
+Itemset *init_itemset(int number, int seed)
+{
+  Itemset *list = (Itemset*)malloc(sizeof(Itemset));
+
+  Item *item = (Item*)malloc(sizeof(Item)*number);
+
+  srand(seed);
+  for (int i = 0 ; i < number ; i++){
+    item[i].value = 0.1 * (rand() % 200);
+    item[i].weight = 0.1 * (rand() % 200 + 1);
+  }
+  *list = (Itemset){.number = number, .item = item};
+  return list;
+}
+int save_itemset(char *filename ,Itemset *list){
+    //失敗したら1を返す
+    FILE *fp;
+    int num = list->number;
+    int i;  //counter
+
+    fp = fopen(filename, "wb");
+    if(fp == NULL){
+        return 1;
+    }
+
+    if(fwrite(&num, sizeof(int), 1, fp) != 1){
+        return 1;
+    }
+
+    for(i = 0; i < num; i++){
+        if(fwrite(&(list->item[i].value), sizeof(double), 1, fp) != 1){
+            return 1;
+        }
+    }
+    for(i = 0; i < num; i++){
+        if(fwrite(&(list->item[i].weight), sizeof(double), 1, fp) != 1){
+            return 1;
+        }
+    }
+
+    fclose(fp);
+    return 0;
+
+}
 int load_int(const char *argvalue)
 {
   long nl;
@@ -127,65 +220,6 @@ double load_double(const char *argvalue)
   }
   return ret;
 }
-
-
-// main関数
-// プログラム使用例: ./knapsack 10 20
-//  10個の品物を設定し、キャパ20 でナップサック問題をとく
-int main (int argc, char**argv)
-{
-  /* 引数処理: ユーザ入力が正しくない場合は使い方を標準エラーに表示して終了 */
-  if (argc != 3){
-    fprintf(stderr, "usage: %s <the number of items (int)> <max capacity (double)>\n",argv[0]);
-    exit(1);
-  }
-  
-  // 個数の上限はあらかじめ定めておく
-  const int max_items = 100;
-
-  const int n = load_int(argv[1]);
-  assert( n <= max_items ); // assert で止める
-
-  const double W = load_double(argv[2]);
-  assert( W >= 0.0);
-  
-  printf("max capacity: W = %.f, # of items: %d\n",W, n);
-
-  // 乱数シードを1にして、初期化 (ここは変更可能)
-  int seed = 1; 
-  Itemset *items = init_itemset(n, seed);
-  print_itemset(items);
-
-  // ソルバーで解く
-  struct solution sol = solve(items, W);
-
-  // 表示する
-  printf("----\nbest solution:\n");
-  for (int i = 0 ; i < items->number ; i++){
-      printf("%d", sol.flags[i]);
-  }
-  printf(", value: %4.1f\n",sol.val);
-  free(sol.flags);
-  free_itemset(items);
-  return 0;
-}
-
-// 構造体をポインタで確保するお作法を確認してみよう
-Itemset *init_itemset(int number, int seed)
-{
-  Itemset *list = (Itemset*)malloc(sizeof(Itemset));
-
-  Item *item = (Item*)malloc(sizeof(Item)*number);
-
-  srand(seed);
-  for (int i = 0 ; i < number ; i++){
-    item[i].value = 0.1 * (rand() % 200);
-    item[i].weight = 0.1 * (rand() % 200 + 1);
-  }
-  *list = (Itemset){.number = number, .item = item};
-  return list;
-}
-
 // itemset の free関数
 void free_itemset(Itemset *list)
 {
